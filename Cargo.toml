@@ -2,7 +2,7 @@
 members = [
   "email-manager",
   # "email-synchronizer",
-  # "contact-manager",
+  "contact-manager",
   # "contact-synchronizer",
   # "calendar-manager",
   # "calendar-synchronizer",
