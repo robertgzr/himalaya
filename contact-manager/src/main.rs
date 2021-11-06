@@ -3,7 +3,6 @@ use clap;
 use env_logger;
 use reqwest::Client;
 use std::env;
-use tokio;
 
 fn create_app<'a>() -> clap::App<'a, 'a> {
     clap::App::new(env!("CARGO_PKG_NAME"))
@@ -13,15 +12,14 @@ fn create_app<'a>() -> clap::App<'a, 'a> {
         .global_setting(clap::AppSettings::GlobalVersion)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Init env logger
     env_logger::init_from_env(
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "off"),
     );
 
-    let app = create_app();
-    let _m = app.get_matches();
+    // let app = create_app();
+    // let _m = app.get_matches();
     // Check completion command BEFORE entities and services initialization.
     // match compl_arg::matches(&m)? {
     //     Some(compl_arg::Command::Generate(shell)) => {

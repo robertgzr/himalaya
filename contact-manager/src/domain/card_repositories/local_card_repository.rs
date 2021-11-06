@@ -5,23 +5,23 @@ use crate::domain::{Card, CardRepository};
 pub struct LocalCardRepository;
 
 impl CardRepository for LocalCardRepository {
-    fn create(_card: Card) -> Result<()> {
+    fn create(&self, _card: &Card) -> Result<()> {
         todo!();
     }
 
-    fn read(_id: String) -> Result<Card> {
+    fn read(&self, _id: &str) -> Result<Card> {
         todo!()
     }
 
-    fn read_all() -> Result<Vec<Card>> {
+    fn read_all(&self) -> Result<Vec<Card>> {
         todo!()
     }
 
-    fn update(_card: Card) -> Result<()> {
+    fn update(&self, _card: &Card) -> Result<()> {
         todo!()
     }
 
-    fn delete(_id: String) -> Result<()> {
+    fn delete(&self, _id: &str) -> Result<()> {
         todo!()
     }
 }

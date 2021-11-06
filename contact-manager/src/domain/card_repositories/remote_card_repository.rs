@@ -1,33 +1,78 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use quick_xml::de as xml;
-use reqwest::Client;
-use reqwest::Method;
+use reqwest::{blocking::Client, Method};
 use serde::Deserialize;
 
 use crate::domain::{Card, CardRepository};
 
-pub struct RemoteCardRepository;
+pub struct RemoteCardRepository<'a> {
+    pub addressbook_path: String,
+    pub client: &'a Client,
+}
 
-impl CardRepository for RemoteCardRepository {
-    fn create(_card: Card) -> Result<()> {
+impl<'a> RemoteCardRepository<'a> {
+    pub fn new(host: &str, client: &'a Client) -> Result<Self> {
+        Ok(Self {
+            addressbook_path: format!("{}{}", host, addressbook_path(host, client)?),
+            client,
+        })
+    }
+}
+
+impl<'a> CardRepository for RemoteCardRepository<'a> {
+    fn create(&self, card: &Card) -> Result<()> {
+        self.client
+            .put(format!("{}{}.vcf", self.addressbook_path, card.id))
+            .header(reqwest::header::CONTENT_TYPE, "text/vcard; charset=utf-8")
+            .basic_auth("user", Some(""))
+            .body(card.raw.clone())
+            .send()
+            .context("cannot send create request")?;
+        Ok(())
+    }
+
+    fn read(&self, id: &str) -> Result<Card> {
+        let res = self
+            .client
+            .get(format!("{}{}.vcf", self.addressbook_path, id))
+            .basic_auth("user", Some(""))
+            .header("Depth", "1")
+            .send()
+            .context(anyhow!(r#"cannot read card "{}""#, id))?;
+
+        if res.status() != 200 {
+            return Err(anyhow!(r#"cannot read card "{}""#, id));
+        }
+
+        let content = res
+            .text()
+            .context(anyhow!(r#"cannot read content of card "{}""#, id))?;
+
+        Ok(Card {
+            id: id.to_owned(),
+            date: Utc::now(),
+            raw: content,
+        })
+    }
+
+    fn read_all(&self) -> Result<Vec<Card>> {
         todo!()
     }
 
-    fn read(_id: String) -> Result<Card> {
+    fn update(&self, _card: &Card) -> Result<()> {
         todo!()
     }
 
-    fn read_all() -> Result<Vec<Card>> {
-        todo!()
-    }
-
-    fn update(_card: Card) -> Result<()> {
-        todo!()
-    }
-
-    fn delete(_id: String) -> Result<()> {
-        todo!()
+    fn delete(&self, id: &str) -> Result<()> {
+        self.client
+            .delete(format!("{}{}.vcf", self.addressbook_path, id))
+            .basic_auth("user", Some(""))
+            // TODO: https://sabre.io/dav/building-a-carddav-client#deleting-a-contact
+            // .header("If-Match", etag)
+            .send()
+            .context("cannot send delete request")?;
+        Ok(())
     }
 }
 
@@ -171,11 +216,7 @@ fn report() -> Result<Method> {
     Method::from_bytes(b"REPORT").context(r#"cannot create custom method "REPORT""#)
 }
 
-pub async fn fetch_current_user_principal_url(
-    host: &str,
-    path: String,
-    client: &Client,
-) -> Result<String> {
+fn fetch_current_user_principal_url(host: &str, path: String, client: &Client) -> Result<String> {
     let res = client
         .request(propfind()?, format!("{}{}", host, path))
         .basic_auth("user", Some(""))
@@ -189,11 +230,9 @@ pub async fn fetch_current_user_principal_url(
             "#,
         )
         .send()
-        .await
         .context("cannot send current user principal request")?;
     let res = res
         .text()
-        .await
         .context("cannot extract text body from current user principal response")?;
     let res: Multistatus<CurrentUserPrincipalProp> =
         xml::from_str(&res).context("cannot parse current user principal response")?;
@@ -212,11 +251,7 @@ pub async fn fetch_current_user_principal_url(
         .unwrap_or(path))
 }
 
-pub async fn fetch_addressbook_home_set_url(
-    host: &str,
-    path: String,
-    client: &Client,
-) -> Result<String> {
+fn fetch_addressbook_home_set_url(host: &str, path: String, client: &Client) -> Result<String> {
     let res = client
         .request(propfind()?, format!("{}{}", host, path))
         .basic_auth("user", Some(""))
@@ -230,11 +265,9 @@ pub async fn fetch_addressbook_home_set_url(
             "#,
         )
         .send()
-        .await
         .context("cannot send addressbook home set request")?;
     let res = res
         .text()
-        .await
         .context("cannot extract text body from addressbook home set response")?;
     let res: Multistatus<AddressbookHomeSetProp> =
         xml::from_str(&res).context("cannot parse addressbook home set response")?;
@@ -246,16 +279,14 @@ pub async fn fetch_addressbook_home_set_url(
         .unwrap_or(path))
 }
 
-pub async fn fetch_addressbook_url(host: &str, path: String, client: &Client) -> Result<String> {
+fn fetch_addressbook_url(host: &str, path: String, client: &Client) -> Result<String> {
     let res = client
         .request(propfind()?, host)
         .basic_auth("user", Some(""))
         .send()
-        .await
         .context("cannot send addressbook request")?;
     let res = res
         .text()
-        .await
         .context("cannot extract text body from addressbook response")?;
     let res: Multistatus<AddressbookProp> =
         xml::from_str(&res).context("cannot parse addressbook response")?;
@@ -282,4 +313,12 @@ pub async fn fetch_addressbook_url(host: &str, path: String, client: &Client) ->
         })
         .map(|res| res.href.value.to_owned())
         .unwrap_or(path))
+}
+
+pub fn addressbook_path(host: &str, client: &Client) -> Result<String> {
+    let path = String::from("/");
+    let path = fetch_current_user_principal_url(host, path, client)?;
+    let path = fetch_addressbook_home_set_url(host, path, client)?;
+    let path = fetch_addressbook_url(host, path, client)?;
+    Ok(path)
 }

@@ -3,9 +3,9 @@ use anyhow::Result;
 use crate::domain::Card;
 
 pub trait CardRepository {
-    fn create(card: Card) -> Result<()>;
-    fn read(id: String) -> Result<Card>;
-    fn read_all() -> Result<Vec<Card>>;
-    fn update(card: Card) -> Result<()>;
-    fn delete(id: String) -> Result<()>;
+    fn create(&self, card: &Card) -> Result<()>;
+    fn read(&self, id: &str) -> Result<Card>;
+    fn read_all(&self) -> Result<Vec<Card>>;
+    fn update(&self, card: &Card) -> Result<()>;
+    fn delete(&self, id: &str) -> Result<()>;
 }
