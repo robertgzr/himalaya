@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::Utc;
+use chrono::Local;
 use reqwest::blocking::Client;
 
 use everest::domain::{card_repositories::RemoteCardRepository, Card, CardRepository};
@@ -10,10 +10,11 @@ fn test_remote_card_repository() -> Result<()> {
     let client = Client::new();
     let repository = RemoteCardRepository::new(host, &client)?;
 
-    let id = "8f16d8b5-7e3a-6cd9-fa49-fc6cea65db2a";
-    let card = Card {
+    let id = "4d60020b-7ee8-4a36-8d3a-eec1323def45";
+    let mut card = Card {
         id: id.to_string(),
-        date: Utc::now(),
+        etag: None,
+        date: Local::now(),
         raw: [
             "BEGIN:VCARD",
             "VERSION:3.0",
@@ -29,16 +30,47 @@ fn test_remote_card_repository() -> Result<()> {
         .join("\r\n"),
     };
 
-    repository.create(&card)?;
+    // Creates a card and checks that the etag is well set.
+    repository.create(&mut card)?;
+    assert!(card.etag.is_some());
+
+    // Checks that the card has been well created.
     let expected_card = repository.read(id)?;
     assert_eq!(expected_card.id, card.id);
+    assert_eq!(expected_card.etag, card.etag);
     assert_eq!(expected_card.raw, card.raw);
 
-    repository.delete(&card.id)?;
+    // Updates a card and checks that the etag is well changed.
+    card.raw = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        &format!("UID:{}", id),
+        "EMAIL:test@mail.com",
+        "FN:UpdatedTest",
+        "N:Nom;Prenom;;;",
+        "ORG:UpdatedTest",
+        "TEL;TYPE=pref:06 06 06 06 06",
+        "END:VCARD",
+        "",
+    ]
+    .join("\r\n");
+    repository.update(&mut card)?;
+    assert_ne!(expected_card.etag, card.etag);
+
+    // Checks that the card has been well updated.
+    let expected_card = repository.read(id)?;
+    assert_eq!(expected_card.id, card.id);
+    assert_eq!(expected_card.etag, card.etag);
+    assert_eq!(expected_card.raw, card.raw);
+
+    // Deletes that the card.
+    repository.delete(&card)?;
+
+    // Checks that the card has been well deleted.
     let res = repository.read(id);
     assert_eq!(
         res.unwrap_err().to_string(),
-        format!(r#"cannot get card "{}""#, id)
+        format!(r#"cannot read card "{}""#, id)
     );
 
     Ok(())

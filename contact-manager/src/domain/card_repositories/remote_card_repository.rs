@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
 use quick_xml::de as xml;
 use reqwest::{blocking::Client, Method};
 use serde::Deserialize;
@@ -21,14 +21,29 @@ impl<'a> RemoteCardRepository<'a> {
 }
 
 impl<'a> CardRepository for RemoteCardRepository<'a> {
-    fn create(&self, card: &Card) -> Result<()> {
-        self.client
+    fn create(&self, card: &mut Card) -> Result<()> {
+        let res = self
+            .client
             .put(format!("{}{}.vcf", self.addressbook_path, card.id))
-            .header(reqwest::header::CONTENT_TYPE, "text/vcard; charset=utf-8")
             .basic_auth("user", Some(""))
+            .header("Content-Type", "text/vcard; charset=utf-8")
             .body(card.raw.clone())
             .send()
-            .context("cannot send create request")?;
+            .with_context(|| "cannot create card")?;
+        let res_status = res.status();
+
+        if !res_status.is_success() {
+            let reason = res.text().unwrap_or(res_status.to_string());
+            return Err(anyhow!(reason).context("cannot create card"));
+        }
+
+        card.etag = res
+            .headers()
+            .get("etag")
+            .and_then(|h| h.to_str().ok())
+            .or_else(|| card.etag.as_deref())
+            .map(String::from);
+
         Ok(())
     }
 
@@ -39,20 +54,38 @@ impl<'a> CardRepository for RemoteCardRepository<'a> {
             .basic_auth("user", Some(""))
             .header("Depth", "1")
             .send()
-            .context(anyhow!(r#"cannot read card "{}""#, id))?;
+            .with_context(|| anyhow!(r#"cannot read card "{}""#, id))?;
+        let res_status = res.status();
 
-        if res.status() != 200 {
-            return Err(anyhow!(r#"cannot read card "{}""#, id));
+        if !res_status.is_success() {
+            let reason = res.text().unwrap_or(res_status.to_string());
+            return Err(anyhow!(reason).context(format!(r#"cannot read card "{}""#, id)));
         }
 
-        let content = res
+        let date = res
+            .headers()
+            .get("last-modified")
+            .ok_or_else(|| anyhow!(r#"cannot get last modified date of card "{}""#, id))?;
+        let date = date
+            .to_str()
+            .with_context(|| anyhow!(r#"cannot parse last modified date of card "{}""#, id))?;
+        let date = DateTime::parse_from_rfc2822(date)
+            .with_context(|| anyhow!(r#"cannot parse last modified date of card "{}""#, id))?
+            .with_timezone(&Local);
+        let etag = res
+            .headers()
+            .get("etag")
+            .and_then(|h| h.to_str().ok())
+            .map(String::from);
+        let raw = res
             .text()
             .context(anyhow!(r#"cannot read content of card "{}""#, id))?;
 
         Ok(Card {
             id: id.to_owned(),
-            date: Utc::now(),
-            raw: content,
+            etag,
+            date,
+            raw,
         })
     }
 
@@ -60,18 +93,58 @@ impl<'a> CardRepository for RemoteCardRepository<'a> {
         todo!()
     }
 
-    fn update(&self, _card: &Card) -> Result<()> {
-        todo!()
+    fn update(&self, card: &mut Card) -> Result<()> {
+        let mut req = self
+            .client
+            .put(format!("{}{}.vcf", self.addressbook_path, card.id))
+            .basic_auth("user", Some(""))
+            .header("Content-Type", "text/vcard; charset=utf-8")
+            .body(card.raw.clone());
+
+        if let Some(etag) = card.etag.as_deref() {
+            req = req.header("If-Match", etag);
+        }
+
+        let res = req
+            .send()
+            .with_context(|| format!(r#"cannot update card "{}""#, card.id))?;
+        let res_status = res.status();
+
+        if !res_status.is_success() {
+            let reason = res.text().unwrap_or(res_status.to_string());
+            return Err(anyhow!(reason).context(format!(r#"cannot update card "{}""#, card.id)));
+        }
+
+        card.etag = res
+            .headers()
+            .get("etag")
+            .and_then(|h| h.to_str().ok())
+            .or_else(|| card.etag.as_deref())
+            .map(String::from);
+
+        Ok(())
     }
 
-    fn delete(&self, id: &str) -> Result<()> {
-        self.client
-            .delete(format!("{}{}.vcf", self.addressbook_path, id))
-            .basic_auth("user", Some(""))
-            // TODO: https://sabre.io/dav/building-a-carddav-client#deleting-a-contact
-            // .header("If-Match", etag)
+    fn delete(&self, card: &Card) -> Result<()> {
+        let mut req = self
+            .client
+            .delete(format!("{}{}.vcf", self.addressbook_path, card.id))
+            .basic_auth("user", Some(""));
+
+        if let Some(etag) = card.etag.as_deref() {
+            req = req.header("If-Match", etag);
+        }
+
+        let res = req
             .send()
-            .context("cannot send delete request")?;
+            .with_context(|| format!(r#"cannot delete card "{}""#, card.id))?;
+        let res_status = res.status();
+
+        if !res_status.is_success() {
+            let reason = res.text().unwrap_or(res_status.to_string());
+            return Err(anyhow!(reason).context(format!(r#"cannot delete card "{}""#, card.id)));
+        }
+
         Ok(())
     }
 }
@@ -109,28 +182,28 @@ pub struct Status {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Ctag {
+pub struct GetCtag {
     #[serde(rename = "$value")]
     pub value: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Etag {
+pub struct GetEtag {
     #[serde(rename = "$value")]
     pub value: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LastModified {
+pub struct GetLastModified {
     #[serde(with = "date_parser", rename = "$value")]
-    pub value: DateTime<Utc>,
+    pub value: DateTime<Local>,
 }
 
 mod date_parser {
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, Local};
     use serde::{self, Deserialize, Deserializer};
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Local>, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -189,8 +262,8 @@ struct Addressbook {}
 #[serde(rename_all = "kebab-case")]
 pub struct AddressDataProp {
     pub address_data: AddressData,
-    pub getetag: Etag,
-    pub getlastmodified: LastModified,
+    pub getetag: GetEtag,
+    pub getlastmodified: GetLastModified,
 }
 
 #[derive(Debug, Deserialize)]
@@ -203,17 +276,13 @@ pub struct AddressData {
 
 #[derive(Debug, Deserialize)]
 pub struct CtagProp {
-    pub getctag: Ctag,
+    pub getctag: GetCtag,
 }
 
 // Methods
 
 fn propfind() -> Result<Method> {
     Method::from_bytes(b"PROPFIND").context(r#"cannot create custom method "PROPFIND""#)
-}
-
-fn report() -> Result<Method> {
-    Method::from_bytes(b"REPORT").context(r#"cannot create custom method "REPORT""#)
 }
 
 fn fetch_current_user_principal_url(host: &str, path: String, client: &Client) -> Result<String> {

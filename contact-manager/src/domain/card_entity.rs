@@ -1,8 +1,11 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local};
+
+pub type Etag = Option<String>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Card {
     pub id: String,
-    pub date: DateTime<Utc>,
+    pub etag: Etag,
+    pub date: DateTime<Local>,
     pub raw: String,
 }
