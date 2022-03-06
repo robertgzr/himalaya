@@ -134,3 +134,8 @@ pub mod config {
 pub mod compl;
 pub mod output;
 pub mod ui;
+
+pub mod tui {
+    pub mod tui_args;
+    pub mod tui_handlers;
+}

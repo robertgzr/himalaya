@@ -13,6 +13,7 @@ use himalaya::{
     msg::{flag_args, flag_handlers, msg_args, msg_handlers, tpl_args, tpl_handlers},
     output::{output_args, OutputFmt, StdoutPrinter},
     smtp::LettreService,
+    tui::{tui_args, tui_handlers},
 };
 
 #[cfg(feature = "imap-backend")]
@@ -37,7 +38,8 @@ fn create_app<'a>() -> clap::App<'a, 'a> {
         .subcommands(compl_args::subcmds())
         .subcommands(account_args::subcmds())
         .subcommands(mbox_args::subcmds())
-        .subcommands(msg_args::subcmds());
+        .subcommands(msg_args::subcmds())
+        .subcommands(tui_args::subcmds());
 
     #[cfg(feature = "imap-backend")]
     let app = app.subcommands(imap_args::subcmds());
@@ -166,6 +168,14 @@ fn main() -> Result<()> {
             }
             _ => (),
         }
+    }
+
+    // Check TUI commands.
+    match tui_args::matches(&m)? {
+        Some(tui_args::Cmd::Start) => {
+            return tui_handlers::start();
+        }
+        _ => (),
     }
 
     // Check account commands.
