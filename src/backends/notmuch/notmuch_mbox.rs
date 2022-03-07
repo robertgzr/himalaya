@@ -12,6 +12,7 @@ use std::{
 use crate::{
     mbox::Mboxes,
     output::{PrintTable, PrintTableOpts, WriteColor},
+    tui::TuiTable,
     ui::{Cell, Row, Table},
 };
 
@@ -76,5 +77,32 @@ impl Table for NotmuchMbox {
         Row::new()
             .cell(Cell::new(&self.name).white())
             .cell(Cell::new(&self.query).green())
+    }
+}
+
+impl<'a> TuiTable<'a> for MaildirMbox {
+    fn head() -> tui::widgets::Row<'a> {
+        use tui::{
+            style::{Color, Modifier, Style},
+            widgets::Row,
+        };
+
+        Row::new(vec!["SUBDIR"]).style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::UNDERLINED),
+        )
+    }
+
+    fn row(&self) -> tui::widgets::Row<'a> {
+        use tui::{
+            style::{Color, Style},
+            widgets::{Cell, Row},
+        };
+
+        Row::new(vec![
+            Cell::from(self.name.clone()).style(Style::default().fg(Color::Green))
+        ])
     }
 }

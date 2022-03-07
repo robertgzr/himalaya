@@ -8,12 +8,16 @@ use std::{
     convert::{TryFrom, TryInto},
     ffi::OsStr,
     fmt::{self, Display},
+    io::Stdout,
     ops::Deref,
 };
+use termcolor::StandardStream;
+use tui::{backend::CrosstermBackend, Frame};
 
 use crate::{
     mbox::Mboxes,
     output::{PrintTable, PrintTableOpts, WriteColor},
+    tui::{RenderTuiTable, TuiTable},
     ui::{Cell, Row, Table},
 };
 
@@ -35,6 +39,12 @@ impl PrintTable for MaildirMboxes {
         Table::print(writer, self, opts)?;
         writeln!(writer)?;
         Ok(())
+    }
+}
+
+impl RenderTuiTable for MaildirMboxes {
+    fn render_tui_table<'a>(&self, frame: &mut Frame<'a, CrosstermBackend<Stdout>>) {
+        TuiTable::render(frame, self)
     }
 }
 
@@ -71,34 +81,30 @@ impl Table for MaildirMbox {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl<'a> TuiTable<'a> for MaildirMbox {
+    fn head() -> tui::widgets::Row<'a> {
+        use tui::{
+            style::{Color, Modifier, Style},
+            widgets::Row,
+        };
 
-    #[test]
-    fn it_should_create_new_mbox() {
-        assert_eq!(MaildirMbox::default(), MaildirMbox::new(""));
-        assert_eq!(
-            MaildirMbox {
-                name: "INBOX".into(),
-                ..MaildirMbox::default()
-            },
-            MaildirMbox::new("INBOX")
-        );
+        Row::new(vec!["SUBDIR"]).style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::UNDERLINED),
+        )
     }
 
-    #[test]
-    fn it_should_display_mbox() {
-        let default_mbox = MaildirMbox::default();
-        assert_eq!("", default_mbox.to_string());
-
-        let new_mbox = MaildirMbox::new("INBOX");
-        assert_eq!("INBOX", new_mbox.to_string());
-
-        let full_mbox = MaildirMbox {
-            name: "Sent".into(),
+    fn row(&self) -> tui::widgets::Row<'a> {
+        use tui::{
+            style::{Color, Style},
+            widgets::{Cell, Row},
         };
-        assert_eq!("Sent", full_mbox.to_string());
+
+        Row::new(vec![
+            Cell::from(self.name.clone()).style(Style::default().fg(Color::Green))
+        ])
     }
 }
 
@@ -137,5 +143,36 @@ impl TryFrom<RawMaildirMbox> for MaildirMbox {
                 })?
                 .into(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_should_create_new_mbox() {
+        assert_eq!(MaildirMbox::default(), MaildirMbox::new(""));
+        assert_eq!(
+            MaildirMbox {
+                name: "INBOX".into(),
+                ..MaildirMbox::default()
+            },
+            MaildirMbox::new("INBOX")
+        );
+    }
+
+    #[test]
+    fn it_should_display_mbox() {
+        let default_mbox = MaildirMbox::default();
+        assert_eq!("", default_mbox.to_string());
+
+        let new_mbox = MaildirMbox::new("INBOX");
+        assert_eq!("INBOX", new_mbox.to_string());
+
+        let full_mbox = MaildirMbox {
+            name: "Sent".into(),
+        };
+        assert_eq!("Sent", full_mbox.to_string());
     }
 }

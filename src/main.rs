@@ -173,7 +173,7 @@ fn main() -> Result<()> {
     // Check TUI commands.
     match tui_args::matches(&m)? {
         Some(tui_args::Cmd::Start) => {
-            return tui_handlers::start();
+            return tui_handlers::start(backend);
         }
         _ => (),
     }

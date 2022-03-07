@@ -9,14 +9,14 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{io, thread, time::Duration};
-use tui::{
-    backend::CrosstermBackend,
-    widgets::{Block, Borders},
-    Terminal,
-};
+use tui::{backend::CrosstermBackend, Terminal};
+
+use crate::backends::Backend;
 
 /// Represents the handler for starting the TUI.
-pub fn start() -> Result<()> {
+pub fn start<'a, B: Backend<'a> + ?Sized>(backend: Box<&'a mut B>) -> Result<()> {
+    let mboxes = backend.get_mboxes()?;
+
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -24,10 +24,8 @@ pub fn start() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    terminal.draw(|f| {
-        let size = f.size();
-        let block = Block::default().title("Block").borders(Borders::ALL);
-        f.render_widget(block, size);
+    terminal.draw(|frame| {
+        mboxes.render_tui_table(frame);
     })?;
 
     thread::sleep(Duration::from_millis(5000));

@@ -1,7 +1,8 @@
-use std::fmt;
+use erased_serde::Serialize;
+use std::fmt::Debug;
 
-use crate::output::PrintTable;
+use crate::{output::PrintTable, tui::RenderTuiTable};
 
-pub trait Mboxes: fmt::Debug + erased_serde::Serialize + PrintTable {
+pub trait Mboxes: Debug + Serialize + PrintTable + RenderTuiTable {
     //
 }

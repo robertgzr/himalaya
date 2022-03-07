@@ -5,9 +5,14 @@
 
 use anyhow::Result;
 use std::fmt::{self, Display};
+use std::io::Stdout;
 use std::ops::Deref;
+use termcolor::StandardStream;
+use tui::backend::CrosstermBackend;
+use tui::Frame;
 
 use crate::mbox::Mboxes;
+use crate::tui::{RenderTuiTable, TuiTable};
 use crate::{
     output::{PrintTable, PrintTableOpts, WriteColor},
     ui::{Cell, Row, Table},
@@ -33,6 +38,12 @@ impl PrintTable for ImapMboxes {
         Table::print(writer, self, opts)?;
         writeln!(writer)?;
         Ok(())
+    }
+}
+
+impl RenderTuiTable for ImapMboxes {
+    fn render_tui_table<'a>(&self, frame: &mut Frame<'a, CrosstermBackend<Stdout>>) {
+        TuiTable::render(frame, self)
     }
 }
 
@@ -90,6 +101,57 @@ impl Table for ImapMbox {
     }
 }
 
+impl<'a> TuiTable<'a> for ImapMbox {
+    fn head() -> tui::widgets::Row<'a> {
+        use tui::{
+            style::{Color, Modifier, Style},
+            widgets::Row,
+        };
+
+        Row::new(vec!["DELIM", "NAME", "ATTRS"]).style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::UNDERLINED),
+        )
+    }
+
+    fn row(&self) -> tui::widgets::Row<'a> {
+        use tui::{
+            style::{Color, Style},
+            widgets::{Cell, Row},
+        };
+
+        Row::new(vec![
+            Cell::from(self.delim.clone()).style(Style::default().fg(Color::White)),
+            Cell::from(self.name.clone()).style(Style::default().fg(Color::Green)),
+            Cell::from(self.attrs.to_string()).style(Style::default().fg(Color::Blue)),
+        ])
+    }
+}
+
+/// Represents a list of raw mailboxes returned by the `imap` crate.
+pub type RawImapMboxes = imap::types::ZeroCopy<Vec<RawImapMbox>>;
+
+impl<'a> From<RawImapMboxes> for ImapMboxes {
+    fn from(raw_mboxes: RawImapMboxes) -> Self {
+        Self(raw_mboxes.iter().map(ImapMbox::from).collect())
+    }
+}
+
+/// Represents the raw mailbox returned by the `imap` crate.
+pub type RawImapMbox = imap::types::Name;
+
+impl<'a> From<&'a RawImapMbox> for ImapMbox {
+    fn from(raw_mbox: &'a RawImapMbox) -> Self {
+        Self {
+            delim: raw_mbox.delimiter().unwrap_or_default().into(),
+            name: raw_mbox.name().into(),
+            attrs: raw_mbox.attributes().into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::backends::ImapMboxAttr;
@@ -122,27 +184,5 @@ mod tests {
             attrs: ImapMboxAttrs(vec![ImapMboxAttr::NoSelect]),
         };
         assert_eq!("Sent", full_mbox.to_string());
-    }
-}
-
-/// Represents a list of raw mailboxes returned by the `imap` crate.
-pub type RawImapMboxes = imap::types::ZeroCopy<Vec<RawImapMbox>>;
-
-impl<'a> From<RawImapMboxes> for ImapMboxes {
-    fn from(raw_mboxes: RawImapMboxes) -> Self {
-        Self(raw_mboxes.iter().map(ImapMbox::from).collect())
-    }
-}
-
-/// Represents the raw mailbox returned by the `imap` crate.
-pub type RawImapMbox = imap::types::Name;
-
-impl<'a> From<&'a RawImapMbox> for ImapMbox {
-    fn from(raw_mbox: &'a RawImapMbox) -> Self {
-        Self {
-            delim: raw_mbox.delimiter().unwrap_or_default().into(),
-            name: raw_mbox.name().into(),
-            attrs: raw_mbox.attributes().into(),
-        }
     }
 }

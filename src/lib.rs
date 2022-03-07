@@ -138,4 +138,7 @@ pub mod ui;
 pub mod tui {
     pub mod tui_args;
     pub mod tui_handlers;
+
+    pub mod tui_table;
+    pub use tui_table::*;
 }
