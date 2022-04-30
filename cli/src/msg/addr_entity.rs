@@ -29,7 +29,7 @@ pub fn from_addrs_to_sendable_mbox(addrs: &Addrs) -> Result<Vec<lettre::message:
             Addr::Group(mailparse::GroupInfo { group_name, addrs }) => {
                 for addr in addrs {
                     sendable_addrs.push(lettre::message::Mailbox::new(
-                        addr.display_name.clone().or(Some(group_name.clone())),
+                        addr.display_name.clone().or_else(|| Some(group_name.clone())),
                         addr.to_string().parse()?,
                     ))
                 }
