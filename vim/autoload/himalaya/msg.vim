@@ -47,6 +47,7 @@ function! himalaya#msg#read()
   try
     let pos = getpos(".")
     let s:msg_id = s:get_focused_msg_id()
+    if empty(s:msg_id) || s:msg_id == "HASH" | return | endif
     let account = himalaya#account#curr()
     let mbox = himalaya#mbox#curr_mbox()
     let msg = s:cli(
@@ -375,7 +376,7 @@ function! s:bufwidth()
 endfunction
 
 function! s:get_msg_id(line)
-    return matchstr(a:line, '[0-9a-z]*')
+  return matchstr(a:line, '[0-9a-z]*')
 endfunction
 
 function! s:get_focused_msg_id()
