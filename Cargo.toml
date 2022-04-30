@@ -1,2 +1,5 @@
 [workspace]
 members = ["lib", "cli"]
+
+[patch.crates-io]
+maildir = { path = "./vendor/maildir" }

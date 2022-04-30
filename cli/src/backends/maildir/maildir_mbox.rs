@@ -131,7 +131,8 @@ impl TryFrom<RawMaildirMbox> for MaildirMbox {
         Ok(Self {
             name: subdir_name
                 .and_then(OsStr::to_str)
-                .and_then(|s| if s.len() < 2 { None } else { Some(&s[1..]) })
+                // why?
+                // .and_then(|s| if s.len() < 2 { None } else { Some(&s[1..]) })
                 .ok_or_else(|| {
                     anyhow!(
                         "cannot parse maildir subdirectory name from path {:?}",
