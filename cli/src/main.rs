@@ -99,6 +99,10 @@ fn main() -> Result<()> {
     let app = create_app();
     let m = app.get_matches();
 
+    if let Some(levelstr) = m.value_of("log-level") {
+        return Err(anyhow::anyhow!("setting log level from cli is not implemented, use RUST_LOG=himalaya={}", levelstr));
+    }
+
     // Check completion command BEFORE entities and services initialization.
     // Related issue: https://github.com/soywod/himalaya/issues/115.
     match compl_args::matches(&m)? {

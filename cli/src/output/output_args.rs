@@ -20,7 +20,6 @@ pub fn args<'a>() -> Vec<Arg<'a, 'a>> {
             .short("l")
             .help("Defines the logs level")
             .value_name("LEVEL")
-            .possible_values(&["error", "warn", "info", "debug", "trace"])
-            .default_value("info"),
+            .possible_values(&["error", "warn", "info", "debug", "trace"]),
     ]
 }
